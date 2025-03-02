@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HMI PLC Interface - Auger Machine</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Animate.css for animations -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        .container {
+            max-width: 850px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            margin-top: 20px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .numeric-display {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            background: #f8f9fa;
+            border: 1px solid #ced4da;
+            border-radius: 5px;
+            padding: 0.375rem 0.75rem;
+        }
+        .btn-toggle {
+            min-width: 80px;
+        }
+        .btn-action {
+            transition: all 0.3s ease;
+            margin: 5px;
+            min-width: 120px;
+        }
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        .btn-on {
+            background-color: #28a745;
+            color: white;
+        }
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            background-color: #dc3545;
+        }
+        .status-active {
+            background-color: #28a745;
+            box-shadow: 0 0 10px #28a745;
+        }
+        .status-section {
+            background-color: rgba(0, 0, 0, 0.03);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .rotating {
+            animation: rotate 2s linear infinite;
+        }
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .pulsing {
+            animation: pulse 1.5s ease infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .input-group-text {
+            min-width: 120px;
+            justify-content: flex-start;
+        }
+        .footer {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 2px solid #eee;
+        }
+        #operationStatus {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container animate__animated animate__fadeIn">
+        <div class="header text-center">
+            <h2 class="mb-3"><i class="fas fa-cogs me-2"></i> HMI PLC Interface - Auger Machine</h2>
+            <div class="alert alert-info" role="alert" id="operationStatus">
+                System Ready - Waiting for Commands
+            </div>
+        </div>
+
+        <div class="status-section">
+            <div class="row align-items-center mb-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-calculator me-2"></i>Production Count</span>
+                        <input type="number" class="form-control text-end" id="prodCount" value="0">
+                    </div>
+                </div>
+                <div class="col-md-4 text-center">
+                    <button class="btn btn-primary btn-action" id="modeToggle" onclick="toggleMode()">
+                        <i class="fas fa-exchange-alt me-2"></i> Manual Mode
+                    </button>
+                </div>
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-tachometer-alt me-2"></i>Production Rate</span>
+                        <input type="number" class="form-control text-end" id="prodRate" value="0">
+                        <span class="input-group-text">Bag/min</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-section">
+            <div class="row align-items-center">
+                <div class="col-md-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <span class="status-indicator" id="runIndicator"></span>
+                        <span class="me-2">Run</span>
+                        <button class="btn btn-outline-secondary btn-toggle ms-auto" id="runButton" onclick="toggleRun()">OFF</button>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <span class="status-indicator" id="screwIndicator"></span>
+                        <span class="me-2">Screw</span>
+                        <button class="btn btn-outline-secondary btn-toggle ms-auto" id="screwButton" onclick="toggleScrew()">OFF</button>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="d-flex align-items-center">
+                        <span class="status-indicator" id="stirIndicator"></span>
+                        <span class="me-2">Stir</span>
+                        <button class="btn btn-outline-secondary btn-toggle ms-auto" id="stirButton" onclick="toggleStir()">OFF</button>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text">Auto Delay</span>
+                        <input type="number" class="form-control text-end" id="autoDelay" value="5">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="status-section">
+            <div class="row align-items-center mb-3">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">Screw Weight</span>
+                        <input type="number" class="form-control text-end" id="screwWeight" value="100">
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="d-flex">
+                        <button class="btn btn-info btn-action" onclick="setWeight()">
+                            <i class="fas fa-weight me-2"></i> Set Weight
+                        </button>
+                        <button class="btn btn-primary btn-action" id="manualModeBtn">
+                            <i class="fas fa-hand-paper me-2"></i> Manual Mode
+                        </button>
+                        <button class="btn btn-primary btn-action" id="pedalSwitchBtn">
+                            <i class="fas fa-shoe-prints me-2"></i> Pedal Switch
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <div class="input-group">
+                        <span class="input-group-text">Weight Factor</span>
+                        <input type="number" class="form-control text-end" id="weightFactor" value="1.0" step="0.1">
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <div class="d-flex">
+                        <button class="btn btn-danger btn-action" onclick="setWeightFactor()">
+                            <i class="fas fa-balance-scale me-2"></i> Weight Factor
+                        </button>
+                        <button class="btn btn-primary btn-action" id="stirOffBtn">
+                            <i class="fas fa-power-off me-2"></i> Stir OFF
+                        </button>
+                        <button class="btn btn-primary btn-action" id="keepStirBtn">
+                            <i class="fas fa-sync me-2"></i> Keep Stirring
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <div class="row">
+                <div class="col-md-12 text-center">
+                    <button class="btn btn-success btn-action" id="homeBtn">
+                        <i class="fas fa-home me-2"></i> Home Page
+                    </button>
+                    <button class="btn btn-primary btn-action" onclick="startProcess()">
+                        <i class="fas fa-play me-2"></i> Start
+                    </button>
+                    <button class="btn btn-warning btn-action" onclick="stopProcess()">
+                        <i class="fas fa-stop me-2"></i> Stop
+                    </button>
+                    <button class="btn btn-warning btn-action" onclick="screwTest()">
+                        <i class="fas fa-vial me-2"></i> Screw Test
+                    </button>
+                    <button class="btn btn-warning btn-action" onclick="screwCleaning()">
+                        <i class="fas fa-broom me-2"></i> Screw Cleaning
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS & Popper.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Set initial values
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize tooltips
+            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            // Set initial values
+            document.getElementById('prodCount').value = '0';
+            document.getElementById('prodRate').value = '0';
+            document.getElementById('autoDelay').value = '5';
+            document.getElementById('screwWeight').value = '100';
+            document.getElementById('weightFactor').value = '1.0';
+            
+            // Add event listeners for all buttons
+            document.getElementById('manualModeBtn').addEventListener('click', function() {
+                showToast('Manual Mode Activated');
+            });
+            
+            document.getElementById('pedalSwitchBtn').addEventListener('click', function() {
+                showToast('Pedal Switch Engaged');
+            });
+            
+            document.getElementById('stirOffBtn').addEventListener('click', function() {
+                showToast('Stir Function Disabled');
+                document.getElementById('stirButton').textContent = 'OFF';
+                document.getElementById('stirButton').classList.remove('btn-on');
+                document.getElementById('stirIndicator').classList.remove('status-active');
+                updateStatus('Stir Turned OFF');
+            });
+            
+            document.getElementById('keepStirBtn').addEventListener('click', function() {
+                showToast('Continuous Stirring Activated');
+                document.getElementById('stirButton').textContent = 'ON';
+                document.getElementById('stirButton').classList.add('btn-on');
+                document.getElementById('stirIndicator').classList.add('status-active');
+                updateStatus('Continuous Stirring Mode');
+            });
+            
+            document.getElementById('homeBtn').addEventListener('click', function() {
+                document.getElementById('operationStatus').innerHTML = 'System Ready - Waiting for Commands';
+                document.getElementById('operationStatus').className = 'alert alert-info';
+                resetAll();
+                showToast('Returned to Home Screen');
+            });
+        });
+
+        // Toggle functions
+        function toggleRun() {
+            let button = document.getElementById("runButton");
+            let indicator = document.getElementById("runIndicator");
+            
+            if (button.textContent === "OFF") {
+                button.textContent = "ON";
+                button.classList.add("btn-on");
+                indicator.classList.add("status-active");
+                updateStatus("System Running");
+            } else {
+                button.textContent = "OFF";
+                button.classList.remove("btn-on");
+                indicator.classList.remove("status-active");
+                updateStatus("System Stopped");
+            }
+            animateButton(button);
+        }
+
+        function toggleScrew() {
+            let button = document.getElementById("screwButton");
+            let indicator = document.getElementById("screwIndicator");
+            
+            if (button.textContent === "OFF") {
+                button.textContent = "ON";
+                button.classList.add("btn-on");
+                indicator.classList.add("status-active");
+                indicator.classList.add("rotating");
+                updateStatus("Screw Activated");
+            } else {
+                button.textContent = "OFF";
+                button.classList.remove("btn-on");
+                indicator.classList.remove("status-active");
+                indicator.classList.remove("rotating");
+                updateStatus("Screw Deactivated");
+            }
+            animateButton(button);
+        }
+
+        function toggleStir() {
+            let button = document.getElementById("stirButton");
+            let indicator = document.getElementById("stirIndicator");
+            
+            if (button.textContent === "OFF") {
+                button.textContent = "ON";
+                button.classList.add("btn-on");
+                indicator.classList.add("status-active");
+                indicator.classList.add("pulsing");
+                updateStatus("Stir Activated");
+            } else {
+                button.textContent = "OFF";
+                button.classList.remove("btn-on");
+                indicator.classList.remove("status-active");
+                indicator.classList.remove("pulsing");
+                updateStatus("Stir Deactivated");
+            }
+            animateButton(button);
+        }
+
+        function toggleMode() {
+            let button = document.getElementById("modeToggle");
+            if (button.textContent.includes("Manual")) {
+                button.innerHTML = '<i class="fas fa-robot me-2"></i> Auto Mode';
+                button.classList.remove("btn-primary");
+                button.classList.add("btn-success");
+                updateStatus("Switched to Auto Mode");
+            } else {
+                button.innerHTML = '<i class="fas fa-exchange-alt me-2"></i> Manual Mode';
+                button.classList.remove("btn-success");
+                button.classList.add("btn-primary");
+                updateStatus("Switched to Manual Mode");
+            }
+            animateButton(button);
+        }
+
+        // Process functions
+        function startProcess() {
+            let runBtn = document.getElementById("runButton");
+            let screwBtn = document.getElementById("screwButton");
+            let stirBtn = document.getElementById("stirButton");
+            let runInd = document.getElementById("runIndicator");
+            let screwInd = document.getElementById("screwIndicator");
+            let stirInd = document.getElementById("stirIndicator");
+            
+            runBtn.textContent = "ON";
+            runBtn.classList.add("btn-on");
+            runInd.classList.add("status-active");
+            
+            screwBtn.textContent = "ON";
+            screwBtn.classList.add("btn-on");
+            screwInd.classList.add("status-active");
+            screwInd.classList.add("rotating");
+            
+            stirBtn.textContent = "ON";
+            stirBtn.classList.add("btn-on");
+            stirInd.classList.add("status-active");
+            stirInd.classList.add("pulsing");
+            
+            updateStatus("Process Started - Full Operation");
+            
+            // Simulate production count increasing
+            startProductionCount();
+            animateButton(document.querySelector('.btn-primary[onclick="startProcess()"]'));
+        }
+
+        function stopProcess() {
+            resetAll();
+            updateStatus("Process Stopped");
+            stopProductionCount();
+            animateButton(document.querySelector('.btn-warning[onclick="stopProcess()"]'));
+        }
+
+        function screwTest() {
+            let screwBtn = document.getElementById("screwButton");
+            let screwInd = document.getElementById("screwIndicator");
+            
+            screwBtn.textContent = "ON";
+            screwBtn.classList.add("btn-on");
+            screwInd.classList.add("status-active");
+            screwInd.classList.add("rotating");
+            
+            updateStatus("Screw Test in Progress");
+            
+            setTimeout(function() {
+                screwBtn.textContent = "OFF";
+                screwBtn.classList.remove("btn-on");
+                screwInd.classList.remove("status-active");
+                screwInd.classList.remove("rotating");
+                updateStatus("Screw Test Completed");
+            }, 5000);
+            
+            animateButton(document.querySelector('.btn-warning[onclick="screwTest()"]'));
+        }
+
+        function screwCleaning() {
+            let screwBtn = document.getElementById("screwButton");
+            let runBtn = document.getElementById("runButton");
+            let screwInd = document.getElementById("screwIndicator");
+            let runInd = document.getElementById("runIndicator");
+            
+            screwBtn.textContent = "ON";
+            screwBtn.classList.add("btn-on");
+            screwInd.classList.add("status-active");
+            screwInd.classList.add("rotating");
+            
+            runBtn.textContent = "ON";
+            runBtn.classList.add("btn-on");
+            runInd.classList.add("status-active");
+            
+            updateStatus("Screw Cleaning in Progress");
+            
+            setTimeout(function() {
+                screwBtn.textContent = "OFF";
+                screwBtn.classList.remove("btn-on");
+                screwInd.classList.remove("status-active");
+                screwInd.classList.remove("rotating");
+                
+                runBtn.textContent = "OFF";
+                runBtn.classList.remove("btn-on");
+                runInd.classList.remove("status-active");
+                
+                updateStatus("Screw Cleaning Completed");
+            }, 8000);
+            
+            animateButton(document.querySelector('.btn-warning[onclick="screwCleaning()"]'));
+        }
+
+        function setWeight() {
+            let weight = document.getElementById("screwWeight").value;
+            updateStatus("Weight Set to " + weight);
+            showToast("Weight Set: " + weight);
+            animateButton(document.querySelector('.btn-info[onclick="setWeight()"]'));
+        }
+
+        function setWeightFactor() {
+            let factor = document.getElementById("weightFactor").value;
+            updateStatus("Weight Factor Set to " + factor);
+            showToast("Weight Factor Set: " + factor);
+            animateButton(document.querySelector('.btn-danger[onclick="setWeightFactor()"]'));
+        }
+
+        // Helper functions
+        function resetAll() {
+            let buttons = document.querySelectorAll(".btn-toggle");
+            let indicators = document.querySelectorAll(".status-indicator");
+            
+            buttons.forEach(button => {
+                button.textContent = "OFF";
+                button.classList.remove("btn-on");
+            });
+            
+            indicators.forEach(indicator => {
+                indicator.classList.remove("status-active");
+                indicator.classList.remove("rotating");
+                indicator.classList.remove("pulsing");
+            });
+        }
+
+        let countInterval;
+        function startProductionCount() {
+            let count = parseInt(document.getElementById("prodCount").value) || 0;
+            let rate = parseInt(document.getElementById("prodRate").value) || 10;
+            
+            document.getElementById("prodRate").value = rate;
+            
+            clearInterval(countInterval);
+            countInterval = setInterval(function() {
+                count++;
+                document.getElementById("prodCount").value = count;
+            }, (60 / rate) * 1000); // Convert rate per minute to milliseconds
+        }
+
+        function stopProductionCount() {
+            clearInterval(countInterval);
+        }
+
+        function updateStatus(message) {
+            let status = document.getElementById("operationStatus");
+            status.innerHTML = message;
+            
+            // Change alert color based on message content
+            if (message.includes("Error") || message.includes("Stopped")) {
+                status.className = "alert alert-danger";
+            } else if (message.includes("Test") || message.includes("Cleaning") || message.includes("Progress")) {
+                status.className = "alert alert-warning";
+            } else if (message.includes("Started") || message.includes("Running") || message.includes("Activated")) {
+                status.className = "alert alert-success";
+            } else {
+                status.className = "alert alert-info";
+            }
+            
+            status.classList.add("animate__animated", "animate__pulse");
+            setTimeout(function() {
+                status.classList.remove("animate__animated", "animate__pulse");
+            }, 1000);
+        }
+
+        function animateButton(button) {
+            button.classList.add("animate__animated", "animate__rubberBand");
+            setTimeout(function() {
+                button.classList.remove("animate__animated", "animate__rubberBand");
+            }, 1000);
+        }
+
+        function showToast(message) {
+            // Create a toast notification
+            const toastContainer = document.createElement('div');
+            toastContainer.style.position = 'fixed';
+            toastContainer.style.top = '20px';
+            toastContainer.style.right = '20px';
+            toastContainer.style.zIndex = '9999';
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast show animate__animated animate__fadeInRight';
+            toast.setAttribute('role', 'alert');
+            toast.setAttribute('aria-live', 'assertive');
+            toast.setAttribute('aria-atomic', 'true');
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <strong class="me-auto">System Notification</strong>
+                    <small>just now</small>
+                    <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+                <div class="toast-body">
+                    ${message}
+                </div>
+            `;
+            
+            toastContainer.appendChild(toast);
+            document.body.appendChild(toastContainer);
+            
+            // Remove toast after 3 seconds
+            setTimeout(function() {
+                toast.classList.remove('animate__fadeInRight');
+                toast.classList.add('animate__fadeOutRight');
+                setTimeout(function() {
+                    document.body.removeChild(toastContainer);
+                }, 1000);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
